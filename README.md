@@ -1,13 +1,12 @@
 # Lethal Virus on Network
 
 ## Informações Gerais do Aluno
-
-Nome: João Víctor Siqueira de Araujo
-Matrícula: 19/0031026
-Disciplina: Computação Experimental - CIC0203
-Turma: A
-Período: 2021/2
-Exemplo utilizado: virus_on_network
+    Nome: João Víctor Siqueira de Araujo
+    Matrícula: 19/0031026
+    Disciplina: Computação Experimental - CIC0203
+    Turma: A
+    Período: 2021/2
+    Exemplo utilizado: virus_on_network
 
 ## Apresentação do Novo Modelo
 
