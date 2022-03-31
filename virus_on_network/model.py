@@ -6,6 +6,8 @@ from mesa import Agent, Model
 from mesa.time import RandomActivation
 from mesa.datacollection import DataCollector
 from mesa.space import NetworkGrid
+from mesa.batchrunner import BatchRunner
+from datetime import date
 
 class State(Enum):
     SUSCEPTIBLE = 0
@@ -43,10 +45,9 @@ class VirusOnNetwork(Model):
         avg_node_degree=3,
         initial_outbreak_size=1,
         virus_spread_chance=0.4,
-        virus_check_frequency=0.4,
         recovery_chance=0.3,
         gain_resistance_chance=0.5,
-        lethality=0.05,
+        lethality=0.1,
     ):
 
         self.num_nodes = num_nodes
@@ -58,24 +59,16 @@ class VirusOnNetwork(Model):
             initial_outbreak_size if initial_outbreak_size <= num_nodes else num_nodes
         )
         self.virus_spread_chance = virus_spread_chance
-        self.virus_check_frequency = virus_check_frequency
         self.recovery_chance = recovery_chance
         self.gain_resistance_chance = gain_resistance_chance
         self.lethality = lethality
 
-        self.stop = False
-
         self.datacollector = DataCollector(
-            model_reporters={
+            {
                 "Infected": number_infected,
                 "Susceptible": number_susceptible,
                 "Resistant": number_resistant,
                 "Deceased": number_deceased,
-                "Death Rate": lambda y : number_deceased(y) / y.num_nodes,
-                "Susceptible Rate": lambda y : number_susceptible(y) / y.num_nodes,
-            },
-            agent_reporters={
-                "Total Infected" : lambda x : x.total_infected,
             }
         )
 
@@ -86,7 +79,6 @@ class VirusOnNetwork(Model):
                 self,
                 State.SUSCEPTIBLE,
                 self.virus_spread_chance,
-                self.virus_check_frequency,
                 self.recovery_chance,
                 self.gain_resistance_chance,
                 self.lethality,
@@ -103,6 +95,13 @@ class VirusOnNetwork(Model):
         self.running = True
         self.datacollector.collect(self)
 
+    def dead_healthy_ratio(self):
+        try:
+            return number_state(self, State.DECEASED) / (number_state(
+                self, State.SUSCEPTIBLE) + number_state(self, State.RESISTANT))
+        except ZeroDivisionError:
+            return math.inf
+
     def resistant_susceptible_ratio(self):
         try:
             return number_state(self, State.RESISTANT) / number_state(
@@ -110,24 +109,25 @@ class VirusOnNetwork(Model):
             )
         except ZeroDivisionError:
             return math.inf
+    
+    def death_rate(self):
+        return number_state(self, State.DECEASED) / self.num_nodes
+    
+    def susceptible_rate(self):
+        return number_state(self, State.SUSCEPTIBLE) / self.num_nodes
 
     def step(self):
         self.schedule.step()
         # collect data
         self.datacollector.collect(self)
-        if number_infected(self) == 0 and not self.stop:
-            data_agent = self.datacollector.get_agent_vars_dataframe()
-            data_model = self.datacollector.get_model_vars_dataframe().drop(
-                columns=["Infected", "Susceptible", "Resistant", "Deceased"]
-            )
-            data_agent.to_csv('agent.csv')
-            data_model.to_csv('model.csv')
-            self.stop = True
 
     def run_model(self, n):
         for i in range(n):
             self.step()
 
+
+INCUBATION_PERIOD = 2
+ACUTE_PERIOD = 5
 
 class VirusAgent(Agent):
     def __init__(
@@ -136,7 +136,6 @@ class VirusAgent(Agent):
         model,
         initial_state,
         virus_spread_chance,
-        virus_check_frequency,
         recovery_chance,
         gain_resistance_chance,
         lethality,
@@ -146,12 +145,12 @@ class VirusAgent(Agent):
         self.state = initial_state
 
         self.virus_spread_chance = virus_spread_chance
-        self.virus_check_frequency = virus_check_frequency
         self.recovery_chance = recovery_chance
         self.gain_resistance_chance = gain_resistance_chance
         self.lethality = lethality
-        
-        self.total_infected = 0
+
+        # How long the agent is infected
+        self.time_infected = 0
 
     def try_to_infect_neighbors(self):
         neighbors_nodes = self.model.grid.get_neighbors(self.pos, include_center=False)
@@ -163,36 +162,91 @@ class VirusAgent(Agent):
         for a in susceptible_neighbors:
             if self.random.random() < self.virus_spread_chance:
                 a.state = State.INFECTED
-                self.total_infected += 1
 
     def try_gain_resistance(self):
-        if self.random.random() < self.gain_resistance_chance:
+        if self.random.random() < self.gain_resistance_chance and self.time_infected > ACUTE_PERIOD:
             self.state = State.RESISTANT
 
     def try_remove_infection(self):
         # Try to remove
-        if self.random.random() < self.recovery_chance:
+        if self.random.random() < self.recovery_chance and self.time_infected > INCUBATION_PERIOD:
             # Success
             self.state = State.SUSCEPTIBLE
             self.try_gain_resistance()
+            self.time_infected = 0
         else:
             # Failed
             self.state = State.INFECTED
 
-    def try_check_situation(self):
-        if self.random.random() < self.virus_check_frequency:
-            # Checking...
-            if self.state is State.INFECTED:
-                self.try_remove_infection()
-    
     def try_kill_agent(self):
-        if self.random.random() < self.lethality:
+        if self.random.random() < self.lethality and self.time_infected > INCUBATION_PERIOD:
             self.state = State.DECEASED
 
     def step(self):
         if self.state is State.INFECTED:
+            self.time_infected += 1
             self.try_kill_agent()
             # Still alive
             if self.state is not State.DECEASED:
+                self.try_remove_infection()
                 self.try_to_infect_neighbors()
-        self.try_check_situation()
+            
+
+def batch_run():
+    # Control variables
+    fixed_params = {
+        'num_nodes': 1000,
+        'avg_node_degree': 8,
+        'initial_outbreak_size': 1,
+        'lethality': 0.1,
+        'recovery_chance': 0.4,
+        'gain_resistance_chance': 0.3
+    }
+
+    # Independent variables
+    variable_params = {
+        'virus_spread_chance': [0.25, 0.5, 1.0]
+    }
+
+    # Number of simulations to reach normal distribution
+    iterations = 500
+    # After 100 steps the model is stable
+    max_steps = 100
+
+    batch_run = BatchRunner(
+        VirusOnNetwork,
+        variable_params,
+        fixed_params,
+        iterations,
+        max_steps,
+        model_reporters={
+            # Dependent variables
+            'Dead Healthy Ratio': lambda m: m.dead_healthy_ratio(),
+            'Death Rate': lambda m: m.death_rate(),
+            'Resistant Susceptible Ratio': lambda m: m.resistant_susceptible_ratio(),
+            'Susceptible Rate': lambda m: m.susceptible_rate(),
+        },
+        agent_reporters={
+            'State': 'state'
+        }
+    )
+    # Run Batch
+    batch_run.run_all()
+
+    # Data Collector
+    batch_data_agent = batch_run.get_agent_vars_dataframe()
+    batch_data_model = batch_run.get_model_vars_dataframe()
+
+    batch_data_agent.to_csv(
+        'agent_data_' + 
+        str(iterations) + '_simulations_' + 
+        str(max_steps) + '_steps_' + 
+        str(date.today()) + '.csv'
+    )
+
+    batch_data_model.to_csv(
+        'model_data_' + 
+        str(iterations) + '_simulations_' + 
+        str(max_steps) + '_steps_' + 
+        str(date.today()) + '.csv'
+    )

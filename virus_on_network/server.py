@@ -12,22 +12,9 @@ def network_portrayal(G):
     # The model ensures there is always 1 agent per node
 
     def node_color(agent):
-        return {State.INFECTED: "#FF0000", State.SUSCEPTIBLE: "#008000", State.DECEASED: "#132188"}.get(
-            agent.state, "#808080"
+        return {State.INFECTED: "#FF0000", State.SUSCEPTIBLE: "#008000", State.DECEASED: "#3D0154"}.get(
+            agent.state, "#1399F3"
         )
-
-    def edge_color(agent1, agent2):
-        if State.RESISTANT in (agent1.state, agent2.state):
-            return "#000000"
-        return "#e8e8e8"
-
-    def edge_width(agent1, agent2):
-        if State.RESISTANT in (agent1.state, agent2.state):
-            return 3
-        return 2
-
-    def get_agents(source, target):
-        return G.nodes[source]["agent"][0], G.nodes[target]["agent"][0]
 
     portrayal = dict()
     portrayal["nodes"] = [
@@ -43,8 +30,8 @@ def network_portrayal(G):
         {
             "source": source,
             "target": target,
-            "color": edge_color(*get_agents(source, target)),
-            "width": edge_width(*get_agents(source, target)),
+            "color": "#e8e8e8",
+            "width": 2,
         }
         for (source, target) in G.edges
     ]
@@ -57,20 +44,30 @@ chart = ChartModule(
     [
         {"Label": "Infected", "Color": "#FF0000"},
         {"Label": "Susceptible", "Color": "#008000"},
-        {"Label": "Resistant", "Color": "#808080"},
-        {"Label": "Deceased", "Color": "#132188"},
+        {"Label": "Resistant", "Color": "#1399F3"},
+        {"Label": "Deceased", "Color": "#3D0154"},
     ]
 )
 
 
 class MyTextElement(TextElement):
     def render(self, model):
-        ratio = model.resistant_susceptible_ratio()
-        ratio_text = "&infin;" if ratio is math.inf else f"{ratio:.2f}"
+        dead_healthy = model.dead_healthy_ratio()
+        dead_healthy_text =  "&infin;" if dead_healthy is math.inf else f"{dead_healthy:.2f}"
+        death_rate = f"{model.death_rate():.2f}"
+        susceptible_rate = f"{model.susceptible_rate():.2f}"
+        resistant = model.resistant_susceptible_ratio()
+        resistant_text = "&infin;" if resistant is math.inf else f"{resistant:.2f}"
         infected_text = str(number_infected(model))
 
-        return "Resistant/Susceptible Ratio: {}<br>Infected Remaining: {}".format(
-            ratio_text, infected_text
+        textOnScree = "Dead/Healthy Ratio: {}<br>"
+        textOnScree += "Death Rate: {}<br>"
+        textOnScree += "Resistant/Susceptible Ratio: {}<br>"
+        textOnScree += "Susceptible Rate: {}<br>"
+        textOnScree += "Infected Remaining: {}"
+
+        return textOnScree.format(
+            dead_healthy_text, death_rate, resistant_text, susceptible_rate, infected_text
         )
 
 
@@ -105,15 +102,6 @@ model_params = {
         0.1,
         description="Probability that susceptible neighbor will be infected",
     ),
-    "virus_check_frequency": UserSettableParameter(
-        "slider",
-        "Virus Check Frequency",
-        0.4,
-        0.0,
-        1.0,
-        0.1,
-        description="Frequency the nodes check whether they are infected by " "a virus",
-    ),
     "recovery_chance": UserSettableParameter(
         "slider",
         "Recovery Chance",
@@ -136,9 +124,9 @@ model_params = {
     "lethality": UserSettableParameter(
         "slider",
         "Lethality",
-        0.05,
+        0.1,
         0.0,
-        0.5,
+        1.0,
         0.05,
         description="Probability that an infected agent dies due to virus",
     )

@@ -16,7 +16,7 @@ O objetivo de adicionar essa nova variável é para estudar como vírus capazes 
 
 ## Hipótese Causal
 
-Quanto maior for a letalidade de um vírus, menor vai ser a taxa de transmissão dentro da rede. Ou seja, o número de indivíduos suscetíveis ao vírus será maior à medida que aumenta a capacidade de matar do vírus.
+Quanto maior for a transmissão de um vírus, maior vai ser a proporção de mortos em relação à indivíduos saudáveis no sistema. Ou seja, dado 2 vírus que possuem a mesma letalidade, o vírus que consegue se espalhar mais entre os agentes acabará por matar um número maior de indivíduos do que o vírus que se espalha menos.
 
 ## Justificativas para as Mudanças
 
@@ -27,22 +27,30 @@ model.py:
 
 2. Foi criada a função number_deceased que conta quantos nós da rede estão no estado morto (DECEASED). Essa função não interfere no modelo, é apenas uma função de auxílio.
 
-3. Foi adicionado um novo parâmetro que é justamente a variável letalidade (lethality). Essa variável vai indicar qual a probabilidade, entre 0.0 a 0.5, do vírus matar seu hospedeiro. Seu valor inicial é de 0.05, ou seja, o vírus tem 5% de chance de matar seu hospedeiro.
+3. Foi adicionado um novo parâmetro que é justamente a variável letalidade (lethality). Essa variável vai indicar qual a probabilidade, entre 0.0 a 1.0, do vírus matar seu hospedeiro. Seu valor inicial é de 0.1, ou seja, o vírus tem 10% de chance de matar seu hospedeiro.
 
-4. O datacollector do modelo também foi modificado. Ele foi dividido entre model_reporters e agent_reporters, para que fosse possível pegar os dados tanto a nível de modelo quanto a nível de agente. A explicação das variáveis coletadas será dada mais adiante.
+4. Foi removida a variável virus_check_frequency por ela não fazer mais sentido com o modelo sendo uma simulação de um vírus humano. Ela representava a probabilidade do agente se autodiagnosticar, o que faz mais sentido para computadores e não humanos.
 
-5. Foi inserido uma variável de modelo stop para auxiliar na coleta de dados. Como o modelo nunca se encerra, essa variável fará que o datacollector pare de guardar dados assim que não houverem mais agentes infectados no modelo. Isso se deve por que, quando não há mais infectados, o modelo entra num estado estacionário e a partir daí fica sempre igual.
+5. Foram criadas duas variáveis globais chamadas: INCUBATION_PERIOD e ACUTE_PERIOD, que indicam o período em dias que o vírus fica em incubação e o período em que a infecção está em seu pico. Agora para o agente morrer ou se recuperar do vírus, é preciso que ele tenha passado do período de incubação. Já para ele ganhar resistência, é preciso que ele tenha passado do período agudo da infecção.
 
-6. Para a classe dos agentes, foi criada uma nova variável própria para o agente, que eu achei de total_infected que conta quantos agentes foram infectados por esse agente específico. Ela é iniciada com zero e incrementada por 1 à medida o agente infecta seus vizinhos. O intuito dessa variável é possibilitar uma visualização de como é feita a transmissão dentro da rede.
+6. Para a classe dos agentes, foi criada uma nova variável própria para o agente, que eu chamei de time_infected que conta há quantos dias o agente está infectado pelo vírus. Ela é iniciada com zero e incrementada por 1 à cada passo da simulação em que o agente está infectado e é zerada quando esse se recupera ou se torna resistente. O intuito dessa variável é deixar o modelo mais fiel à situação real de contágio.
 
-7. Foi criada uma nova função para o agente, chamada de try_kill_agent que representa a situação na qual o vírus tenta matar o seu hospedeiro baseando-se na probabilidade do vírus matar um agente, que é justamente o valor da variável letalidade (lethality).
+7. Foi removida a função try_check_situation() por causa da remoção da variável virus_check_frequency. A sua lógica, entretanto, foi mantida na função step() do agente.
 
-8. Por fim, a função step do agente foi modificada de tal forma que para que todo agente infectado, o vírus tenta matar esse agente, e, caso o agente não morra, o vírus tenta infectar os vizinhos.
+8. Foi criada uma nova função para o agente, chamada de try_kill_agent que representa a situação na qual o vírus tenta matar o seu hospedeiro baseando-se na probabilidade do vírus matar um agente, que é justamente o valor da variável letalidade (lethality).
+
+9. Por fim, a função step() do agente foi modificada de tal forma que para que todo agente infectado, o vírus tenta matar esse agente, e, caso o agente não morra, ele tenta remover a infecção e caso não consiga, aí sim, o vírus tenta infectar os vizinhos.
+
+10. Foi criado um batch_run() para executar simulações do modelo. Esse batch_run() captura as variáveis de controle, independentes e dependentes tanto para agente quanto para o modelo e gera um arquivo .csv.
 
 server.py:
 1. Foi adicionado o parâmetro de modelo "lethality" que é do tipo slider. Essa alteração que permitirá que o usuário altere o valor desse parâmetro por meio da interface gráfica.
 
-2. Foi feita também a inserção de uma cor para representar os agentes no estado morto (DECEASED). E por fim, esse estado também foi inserido no gráfico que mostrava a quantidade de agentes em um determinado estado a cada iteração.
+2. Foi removido o parâmetro "virus_check_frequency" como especificado anteriormente.
+
+3. Foi feita também a inserção de uma cor para representar os agentes no estado morto (DECEASED). E por fim, esse estado também foi inserido no gráfico que mostrava a quantidade de agentes em um determinado estado a cada iteração.
+
+4. Foram adicionadas as variáveis dependentes: Dead Healthy Ratio, Death Rate e Susceptible Rate no texto da simulação.
 
 ## Orientações Sobre Como Usar o Simulador
 
@@ -52,18 +60,17 @@ Ao executar o modelo, a interface apresentará no lado esquerdo uma série de pa
 - Avg Node Degree: a quantidade média de arestas (links) que saem de cada nó (agente).
 - Initial Outbreak Size: a quantidade de nós (agentes) infectados inicialmente.
 - Virus Spread Chance: a probabilidade de um nó (agente) espalhar o vírus para os seus vizinhos.
-- Virus Check Frequency: a probabilidade de um nó (agente) suscetível fazer um auto diagnóstico.
 - Recovery Chance: a probabilidade de um nó (agente) infectado se recuperar e voltar ao estado suscetível
 - Gain Resistance Chance: a probabilidade de um nó (agente) suscetível, que anteriormente foi infectado, de se tornar resistente ao vírus.
 - Lethality: a probabilidade de um nó (agente) infectado ser morto pelo vírus.
 
-No centro, temos a rede dos agentes em si, com um número pré-determinado de agentes infectados (Initial Outbreak Size) e a partir de cada passo, um agente infectado pode ou acabar morrendo pelo vírus ou infectar os agentes suscetíveis na sua vizinhança ou pode se recuperar do vírus voltando a ser suscetível e, talvez, ficar resistente ao vírus. Abaixo dessa rede, temos um gráfico que mostra a quantidade de agentes de cada estado (SUSCEPTIBLE, INFECTED, RESISTANT, DECEASED) para cada um dos passos de iteração.
-
-Para uma melhor visualização do experimento em si, recomenda-se alterar apenas os valores de "Number of agents", "Initial Outbreak Size" e "Lethality", os restantes ficariam com o valor padrão. Ao fazer a manipulação da variável "Lethality" fica perceptível que à medida que essa variável aumenta, menos agentes são infectados pelo vírus, o que se prova pelo maior número de agentes suscetíveis ao final da execução. Indicando dessa forma que o vírus não conseguiu se espalhar muito devido à alta letalidade. Ou seja, tem-se uma diminuição da taxa de transmissão do vírus pela rede.
+No centro, temos a rede dos agentes em si, com um número pré-determinado de agentes infectados (Initial Outbreak Size) e a partir de cada passo, um agente infectado pode ou acabar morrendo pelo vírus ou infectar os agentes suscetíveis na sua vizinhança ou pode se recuperar do vírus voltando a ser suscetível e, talvez, ficar resistente ao vírus. Abaixo dessa rede, temos um gráfico que mostra a quantidade de agentes de cada estado (SUSCEPTIBLE, INFECTED, RESISTANT, DECEASED) para cada um dos passos de iteração. Também abaixo da rede, temos as variáveis dependetes mostrando a proporção de mortos em relação aos agentes saudáveis (Dead Healthy Ratio), a porcentagem de mortos (Death Rate), a proporção entre os agentes resistentes e os agentes suscetíveis (Resistant Susceptible Ratio) e a porcentagem de agentes suscetíveis (Susceptible Rate).
 
 ## Descrição das Variáveis Armazenadas no Arquivo CSV
 
-Como dito anteriormente, o datacollector coletava dados da simulação a nível de modelo e a nível do agente. Esses dados foram salvos em arquivos CSV que podem ser vistos dentro da pasta data_collection. Os dados referentes ao modelo foram salvos nos arquivos iniciados com model_data. Já os dados referentes ao agente foram salvos nos arquivos iniciados com agent_data. A seguir temos a descrição de cada uma das variáveis dentro desses arquivos CSV.
+Os dados contidos na pasta data_collection seguem a descrição abaixo:
+
+O datacollector coletava dados da simulação a nível de modelo e a nível do agente. Esses dados foram salvos em arquivos CSV que podem ser vistos dentro da pasta data_collection. Os dados referentes ao modelo foram salvos nos arquivos iniciados com model_data. Já os dados referentes ao agente foram salvos nos arquivos iniciados com agent_data. A seguir temos a descrição de cada uma das variáveis dentro desses arquivos CSV.
 
 Para os dados a nível de modelo temos as seguintes variáveis:
 - Death Rate: indica a proporção de agentes mortos com relação ao total de agentes na rede. O objetivo dessa variável é verificar como o aumento da letalidade acaba por influenciar na quantidade de mortos total na rede.
@@ -71,6 +78,27 @@ Para os dados a nível de modelo temos as seguintes variáveis:
 
 Para os dados a nível de agente temos a seguinte variável:
 - Total Infected: indica a quantidade de vizinhos infectados pelo agente. A ideia de armazenar essa variável é ver que a medida que a letalidade aumenta, menor vai ser o número de agentes que tenham infectado algum vizinho, e também menor vai ser a quantidade de vizinhos infectados pelo agente.
+
+
+Já os CSVs da pasta batch_data_collection seguem a descrição abaixo:
+
+Os dados a nível de modelo:
+- Variáveis de Controle:
+    - num_nodes: quantidade de agentes presentes na rede.
+    - avg_node_degree: número médio de arestas por vértice no gráfico.
+    - initial_outbreak_size: quantidade de agentes infectados ao início da simulação.
+    - lethality: probabilidade do vírus matar um agente, é a nova variável adicionada ao modelo.
+    - recovery_chance: probabilidade do agente se recuperar do vírus (voltar a ser suscetível).
+    - gain_resistance_chance:} probabilidade do agente adquirir resistência ao vírus, após se recuperar.
+- Variáveis Independentes:
+    - virus_spread_chance: probabilidade de um agente infectado infectar os seus vizinhos.
+- Variáveis Dependentes:
+    - Dead Healthy Ratio: variável que indica a proporção da quantidade de mortos em relação à quantidade de agentes saudáveis (suscetíveis e resistentes).
+    - Death Rate: variável que indica a porcentagem de mortos totais na rede.
+    - Resistant Susceptible Ratio: variável que indica a proporção da quantidade de resistentes em relação à quantidade de agentes suscetíveis.
+    - Susceptible Rate: variável que indica a porcentagem do total agentes suscetíveis na rede.
+
+Os dados a nível do agente, são os mesmos dados das variáveis independentes e de controle juntamente com uma variável que guarda o estado atual do agente.
 
 # README Original do Modelo
 
