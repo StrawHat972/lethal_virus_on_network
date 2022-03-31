@@ -98,7 +98,7 @@ Os dados a nível de modelo:
     - Resistant Susceptible Ratio: variável que indica a proporção da quantidade de resistentes em relação à quantidade de agentes suscetíveis.
     - Susceptible Rate: variável que indica a porcentagem do total agentes suscetíveis na rede.
 
-Os dados a nível do agente eram muito grandes para enviar para o GitHub e por isso não foram enviados, mas não há muito problema visto que os dados que serão usados para a análise exploratório são os dados do modelo. Se for preciso, basta executar batch_run.py para gerar esse arquivo.
+Os dados a nível do agente eram muito grandes para enviar para o GitHub e por isso foram enviados em formato .zip, mas não há muito problema visto que os dados que serão usados para a análise exploratória são os dados do modelo. De resto, esses dados continham as mesmas variáveis de controle do modelo e o estado do agente a cada passo.
 
 # README Original do Modelo
 
